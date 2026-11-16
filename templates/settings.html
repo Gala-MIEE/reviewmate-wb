@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Настройки{% endblock %}
+{% block body %}
+<h1>Настройки</h1>
+<form method="post" class="grid2" style="margin-top:12px">
+  <div class="card">
+    <h2>Автоматическая отправка ответов</h2>
+    <p class="hint">Когда включено, сервис сам публикует ответы на подходящие отзывы. Вопросы, отзывы с вопросами, жалобы с высоким и критичным приоритетом всегда идут менеджеру.</p>
+    <label class="switch"><input type="checkbox" name="auto_reply_enabled" {{ 'checked' if S.auto_reply_enabled }}> Включить автоответ</label>
+    <label for="auto_min_rating">Отвечать автоматически на оценки не ниже</label>
+    <select id="auto_min_rating" name="auto_min_rating">{% for i in (5,4,3) %}<option value="{{ i }}" {{ 'selected' if S.auto_min_rating==i }}>{{ i }}★{% if i<5 %} и выше{% endif %}</option>{% endfor %}</select>
+    <label>Сценарии для автоответа</label>
+    {% for sc in scenarios %}<label class="check"><input type="checkbox" name="auto_scenarios" value="{{ sc }}" {{ 'checked' if sc in S.auto_scenarios }}> {{ sc }}</label>{% endfor %}
+    <label for="auto_delay_min">Задержка перед отправкой, минут</label>
+    <input type="number" id="auto_delay_min" name="auto_delay_min" min="0" value="{{ S.auto_delay_min }}">
+    <p class="hint">В это время ответ виден во вкладке «Автоответ запланирован», и его можно отменить.</p>
+    <label for="auto_daily_limit">Не больше автоответов в сутки</label>
+    <input type="number" id="auto_daily_limit" name="auto_daily_limit" min="0" value="{{ S.auto_daily_limit }}">
+    <label class="check"><input type="checkbox" name="auto_skip_media" {{ 'checked' if S.auto_skip_media }}> Отзывы с фото или видео отдавать менеджеру</label>
+  </div>
+  <div class="card">
+    <h2>Проверка площадок</h2>
+    <label for="poll_interval_min">Проверять новые отзывы и вопросы каждые, минут</label>
+    <input type="number" id="poll_interval_min" name="poll_interval_min" min="5" value="{{ S.poll_interval_min }}">
+    <p class="hint">Последняя проверка: {{ S.last_poll_at|dt }}.
+      {% set result = S.last_poll_result %}
+      {% if result is mapping and result.new_feedbacks is defined %}
+        Новых отзывов: {{ result.new_feedbacks }}, вопросов: {{ result.new_questions }}{% if result.error %}, ошибка: {{ result.error }}{% endif %}.
+      {% elif result is mapping %}
+        {% for code, title in (('wb', 'Wildberries'), ('ozon', 'Ozon'), ('ym', 'Яндекс Маркет')) %}
+          {% set row = result.get(code) %}
+          {% if row is mapping %}
+            {{ title }}:
+            {% if row.skipped %}{{ row.skipped }}
+            {% elif row.error %}ошибка — {{ row.error }}
+            {% else %}отзывов {{ row.new_feedbacks or 0 }}, вопросов {{ row.new_questions or 0 }}{% endif %}.
+          {% endif %}
+        {% endfor %}
+      {% endif %}</p>
+    <h2 style="margin-top:20px">Ответы</h2>
+    <label for="signature">Подпись</label>
+    <input type="text" id="signature" name="signature" value="{{ S.signature }}">
+    <label for="stop_words">Стоп-слова (через запятую): ответ с ними не уйдёт на площадку</label>
+    <textarea id="stop_words" name="stop_words" style="min-height:90px">{{ S.stop_words|join(', ') }}</textarea>
+    <h2 style="margin-top:20px">Подключения</h2>
+    <dl class="kv"><dt>Wildberries</dt><dd>{{ 'демо-режим: кабинет не опрашивается, ответ покупателю не уходит' if DEMO else 'рабочий кабинет' }}</dd>
+      <dt>Ozon</dt><dd>{% if DEMO and OZON_KEYS %}демо-режим: кабинет не опрашивается, ответ покупателю не уходит{% elif OZON %}ключ задан, отзывы подтянутся при проверке{% elif SAMPLE_OZON %}тестовый набор, {{ SAMPLE_OZON }} шт., на Ozon ничего не уходит{% else %}не подключено — добавьте OZON_CLIENT_ID и OZON_API_KEY{% endif %}</dd>
+      <dt>Яндекс Маркет</dt><dd>{% if DEMO and YM_KEYS %}демо-режим: кабинет не опрашивается, ответ покупателю не уходит{% elif YM %}ключ задан, отзывы подтянутся при проверке{% elif SAMPLE_YM %}тестовый набор, {{ SAMPLE_YM }} шт., на Маркет ничего не уходит{% else %}не подключено — добавьте YM_API_KEY и YM_BUSINESS_ID{% endif %}</dd>
+      <dt>Нейросеть</dt><dd>{{ 'подключена' if LLM else 'не подключена — ответы по шаблонам' }}</dd></dl>
+    <div class="btns"><button class="btn">Сохранить настройки</button></div>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}ReviewMate{% endblock %} · Paperform</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header><div class="top">
+  <a class="brand" href="{{ url_for('inbox') }}">ReviewMate<small>Paperform · WB, Ozon, Маркет</small></a>
+  <nav class="main">
+    <a href="{{ url_for('inbox') }}" class="{{ 'on' if request.endpoint in ('inbox','item') }}">Отзывы и вопросы{% if counts.manager %} ({{ counts.manager }}){% endif %}</a>
+    <a href="{{ url_for('analytics') }}" class="{{ 'on' if request.endpoint=='analytics' }}">Аналитика</a>
+    <a href="{{ url_for('ask') }}" class="{{ 'on' if request.endpoint=='ask' }}">Спросить</a>
+    <a href="{{ url_for('settings') }}" class="{{ 'on' if request.endpoint=='settings' }}">Настройки</a>
+    <a href="{{ url_for('log_page') }}" class="{{ 'on' if request.endpoint=='log_page' }}">Журнал</a>
+  </nav>
+  <div class="status">
+    {% if DEMO %}<span class="pill demo">Демо-режим: ответы на площадки не уходят</span>{% endif %}
+    <span class="pill {{ 'on' if S.auto_reply_enabled }}">Автоответ: {{ 'включён' if S.auto_reply_enabled else 'выключен' }}</span>
+    <span>Проверка: {{ S.last_poll_at|dt }}</span>
+    <form method="post" action="{{ url_for('poll_now') }}"><button class="btn small ghost">Проверить сейчас</button></form>
+  </div>
+</div></header>
+<main>
+  {% if S.snapshot_loaded %}<div class="banner ok">Показаны отзывы из сохранённой выгрузки Wildberries. Демо-кабинет к ним не подмешивается.</div>{% endif %}
+  {% set alerts = S.token_alerts if S.token_alerts is mapping else {} %}
+  {% for code, msg in alerts.items() if msg %}
+    <div class="banner"><b>{{ {'wb':'Wildberries','ozon':'Ozon','ym':'Яндекс Маркет'}.get(code, 'Площадка') }}.</b> {{ msg }}</div>
+  {% endfor %}
+  {% if S.token_alert and not alerts %}<div class="banner">{{ S.token_alert }}</div>{% endif %}
+  {% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}
+    <div class="banner {{ 'ok' if cat=='ok' else '' }}">{{ m }}</div>{% endfor %}{% endwith %}
+  {% block body %}{% endblock %}
+</main>
+</body>
+</html>

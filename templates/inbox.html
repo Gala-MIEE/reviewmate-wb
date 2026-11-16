@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Отзывы и вопросы{% endblock %}
+{% block body %}
+<h1>Отзывы и вопросы</h1>
+<p class="hint">Сверху — вопросы покупателей и самые срочные отзывы. Откройте карточку, проверьте черновик и нажмите «Опубликовать».</p>
+{% if q_open %}<div class="banner warn"><b>Вопросов без ответа: {{ q_open }}.</b> На вопросы отвечает менеджер — автоответ их не трогает.</div>{% endif %}
+<div class="tabs">
+  {% for key, (title, _) in TABS.items() %}
+    <a href="{{ url_for('inbox', tab=key, kind=kind, market=market) }}" class="{{ 'on' if tab==key }}">{{ title }}<span class="n">{{ counts[key] }}</span></a>
+  {% endfor %}
+  <span style="flex:1"></span>
+  <a href="{{ url_for('inbox', tab=tab, kind=kind) }}" class="{{ 'on' if not market }}">Все площадки</a>
+  {% for p in PLATFORMS %}
+    <a href="{{ url_for('inbox', tab=tab, kind=kind, market=p.code) }}" class="{{ 'on' if market==p.code }}">{{ p.title }}</a>
+  {% endfor %}
+</div>
+<div class="tabs">
+  <a href="{{ url_for('inbox', tab=tab, market=market) }}" class="{{ 'on' if not kind }}">Всё</a>
+  <a href="{{ url_for('inbox', tab=tab, kind='question', market=market) }}" class="{{ 'on' if kind=='question' }}">Только вопросы</a>
+  <a href="{{ url_for('inbox', tab=tab, kind='feedback', market=market) }}" class="{{ 'on' if kind=='feedback' }}">Только отзывы</a>
+</div>
+{% if truncated %}<p class="hint">Показаны первые 300 записей. Остальные есть в счётчике вкладки — сузьте площадку или тип.</p>{% endif %}
+<div class="list">
+{% for r in rows %}
+  <a class="row" href="{{ url_for('item', item_id=r.id) }}">
+    <span class="stripe {{ r.priority }}"></span>
+    <div>
+      <div class="meta">
+        {% if r.kind=='question' %}<span class="chip q">Вопрос</span>
+        {% else %}<span class="stars" aria-label="{{ r.rating }} из 5">{{ '★' * (r.rating or 0) }}{{ '☆' * (5-(r.rating or 0)) }}</span>{% endif %}
+        {% if r.has_question and r.kind=='feedback' %}<span class="chip q">Есть вопрос</span>{% endif %}
+        {% if r.priority %}<span class="chip {{ r.priority }}">{{ r.priority }}</span>{% endif %}
+        {% if r.theme %}<span class="chip">{{ r.theme }}</span>{% endif %}
+        {% if r.marketplace %}<span class="chip {{ r.marketplace }}">{{ {'wb':'WB','ozon':'Ozon','ym':'Маркет'}.get(r.marketplace, r.marketplace) }}</span>{% endif %}
+        <span>{{ r.product_name }}</span>
+      </div>
+      <p class="t">{{ r.text or r.pros or r.cons or '(без текста, только оценка)' }}</p>
+    </div>
+    <div class="side">{{ r.created_at|dt }}<br>{{ STATUS_RU.get(r.status, r.status) }}
+      {% if r.status=='scheduled' %}<br>уйдёт {{ r.send_after|dt }}{% endif %}</div>
+  </a>
+{% else %}
+  <div class="empty">{% if market == 'ozon' and not OZON and not SAMPLE_OZON %}Ozon не подключён. Добавьте OZON_CLIENT_ID и OZON_API_KEY — отзывы появятся после проверки.{% elif market == 'ym' and not YM and not SAMPLE_YM %}Яндекс Маркет не подключён. Добавьте YM_API_KEY и YM_BUSINESS_ID — отзывы появятся после проверки.{% elif market %}На этой площадке в этой вкладке записей нет.{% else %}Здесь пусто. {% if tab=='manager' %}Все отзывы обработаны.{% endif %}{% endif %}</div>
+{% endfor %}
+</div>
+{% endblock %}

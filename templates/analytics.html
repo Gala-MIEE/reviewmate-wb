@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Аналитика{% endblock %}
+{% macro bars(items, total) -%}
+  {% set mx = (items|map(attribute=1)|max) if items else 1 %}
+  <div class="bars">{% for k, v in items %}
+    <div class="bar"><span>{{ k }}</span><span class="track"><span class="fill" style="width:{{ (v*100/(mx or 1))|round(1) }}%"></span></span>
+    <span class="n">{{ v }} · {{ ((v*100/total)|round|int) if total else 0 }}%</span></div>{% endfor %}</div>
+{%- endmacro %}
+{% block body %}
+<h1>Аналитика отзывов</h1>
+<p class="hint">Группы «Негатив», «Вопросы» и «Пожелания» размечает нейросеть по смыслу текста, а не по числу звёзд. «Критичные» — то, на что отвечают в первую очередь. Оценки без слов скрыты{% if d.hidden %}: {{ d.hidden }}{% endif %}.</p>
+<h2>Площадки</h2>
+<div class="tiles">
+  {% for p in d.platforms %}
+  <div class="tile">
+    <div class="l">{{ p.title }}</div>
+    <div class="v">{{ p.total if p.total else '—' }}</div>
+    <div class="l">{{ p.state }}{% if p.total %} · средняя {{ ('%.1f'|format(p.avg)).replace('.', ',') if p.avg else '—' }} · негатив {{ p.neg_pct }}%{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+{% if d.platforms|selectattr('state', 'equalto', 'тестовый набор')|list %}
+<p class="hint">Сводка ниже складывает площадки вместе. Тестовые отзывы в кабинет не уходят.</p>
+{% endif %}
+<div class="tabs" style="margin-top:8px">
+  {% for n, label in ((7, '7 дней'), (30, '30 дней'), (90, '90 дней'), (365, '365 дней'), (0, 'Все')) %}
+    <a href="{{ url_for('analytics', days=n, focus=d.focus) }}" class="{{ 'on' if d.days==n }}">{{ label }}</a>{% endfor %}
+</div>
+<div class="tiles">
+  <div class="tile"><div class="v">{{ d.total }}</div><div class="l">отзывов</div></div>
+  <div class="tile"><div class="v">{{ ('%.1f'|format(d.avg)).replace('.', ',') if d.avg else '—' }}</div><div class="l">средняя оценка</div></div>
+  <div class="tile"><div class="v">{{ (d.neg_share*100)|round|int }}%</div><div class="l">негативных</div></div>
+  <div class="tile"><div class="v">{{ d.questions_n }}</div><div class="l">с вопросом</div></div>
+  <div class="tile"><div class="v" style="color:var(--crit)">{{ d.critical|length }}</div><div class="l">критичных</div></div>
+  <div class="tile"><div class="v">{{ d.auto }} / {{ d.manual }}</div><div class="l">ответов: авто / менеджер</div></div>
+  <div class="tile"><div class="v">{{ ('%.1f'|format(d.resp_hours)).replace('.', ',') ~ ' ч' if d.resp_hours is not none else '—' }}</div><div class="l">среднее время ответа</div></div>
+</div>
+<section class="card report" id="summary">
+  <div class="report-head">
+    <h2>Отчёт за период</h2>
+    <div class="btns" style="margin-top:0">
+      {% if llm %}<form method="post" action="{{ url_for('analytics_summary') }}"><input type="hidden" name="days" value="{{ d.days }}">
+        <button class="btn small">{{ 'Обновить выводы' if conclusions else 'Выводы нейросети' }}</button></form>{% endif %}
+      <a class="btn ghost small" href="{{ url_for('analytics_report', days=d.days) }}">Скачать отчёт (Excel)</a>
+      <button type="button" class="btn ghost small" onclick="copyReport()">Скопировать отчёт</button>
+    </div>
+  </div>
+  {% if conclusions %}
+    <p>{{ conclusions.conclusion }}</p>
+    {% if conclusions.recommendations %}<ol class="recs">{% for r in conclusions.recommendations %}
+      <li>{{ r.action }}{% if r.owner %} <span class="hint">— {{ r.owner }}</span>{% endif %}</li>{% endfor %}</ol>{% endif %}
+    <p class="hint">Выводы написала нейросеть по цифрам этого периода, {{ conclusions.at|dt }}. Проверьте перед отправкой руководителю.</p>
+  {% elif llm %}
+    <p class="hint">Нажмите «Выводы нейросети» — она напишет главное за период и три рекомендации с ответственными. Цифры в отчёте считает программа.</p>
+  {% else %}
+    <p class="hint">Нейросеть не подключена: в отчёте будут только цифры.</p>
+  {% endif %}
+  <textarea id="report-text" class="sr-only" readonly>{{ report_text }}</textarea>
+</section>
+<script>
+function copyReport(){const el=document.getElementById('report-text');const t=el.value;
+  const ok=()=>{const b=document.createElement('div');b.className='banner ok';b.textContent='Отчёт скопирован — вставьте его в письмо или мессенджер';document.querySelector('main').prepend(b);setTimeout(()=>b.remove(),2500);};
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(ok,()=>{el.classList.remove('sr-only');el.select();document.execCommand('copy');el.classList.add('sr-only');ok();});}
+</script>
+<h2>Что написали покупатели</h2>
+<div class="tabs">
+  {% for key, label in d.focuses %}
+    <a href="{{ url_for('analytics', days=d.days, focus=key) }}" class="{{ 'on' if d.focus==key }}">{{ label }}<span class="n">{{ d.counts[key] }}</span></a>
+  {% endfor %}
+</div>
+{% if d.focus=='ideas' %}
+<p class="hint">Нейросеть собирает темы для соцсетей из вопросов, пожеланий и замечаний в 5★{% if d.ideas_source %}: сигналов {{ d.ideas_source }}{% endif %}. Это поводы для постов, не готовые тексты.</p>
+<div class="list">
+{% for idea in d.ideas %}
+  <article class="card idea">
+    <div class="meta">
+      {% if idea.basis %}<span class="chip">{{ idea.basis }}</span>{% endif %}
+      {% if idea.signals %}<span class="hint">{{ idea.signals }}</span>{% endif %}
+    </div>
+    <h3>{{ idea.title }}</h3>
+    <p>{{ idea.angle }}</p>
+    {% if idea.products %}<p class="hint">{{ idea.products }}</p>{% endif %}
+  </article>
+{% else %}
+  <div class="empty">{% if d.ideas_pending %}Собираем темы. Обновите страницу через минуту.{% else %}{{ d.ideas_error or 'Поводов для контента за период нет.' }}{% endif %}</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="list">
+{% for r in d.shown %}
+  <a class="row" href="{{ url_for('item', item_id=r.id) }}">
+    <span class="stripe {{ r.priority }}"></span>
+    <div>
+      <div class="meta">
+        {% if r.kind=='question' %}<span class="chip q">Вопрос</span>{% else %}<span class="stars">{{ '★' * (r.rating or 0) }}{{ '☆' * (5-(r.rating or 0)) }}</span>{% endif %}
+        <span class="chip {{ r.marketplace }}">{{ {'wb':'WB','ozon':'Ozon','ym':'Маркет'}.get(r.marketplace, r.marketplace) }}</span>
+        <span class="chip {{ r.tone }}">{{ r.tone }}</span>
+        <span class="chip">{{ r.scenario }}</span>
+        {% if r.theme %}<span class="chip">{{ r.theme }}</span>{% endif %}
+        {% if r.has_question %}<span class="chip q">Вопрос</span>{% endif %}
+        {% if r.wish %}<span class="chip">Пожелание</span>{% endif %}
+        <span>{{ r.product_name }}</span>
+      </div>
+      <p class="t full">{{ r.body }}</p>
+      {% if r.summary %}<p class="hint">{{ r.summary }}</p>{% endif %}
+    </div>
+    <div class="side">{{ r.created_at|dt }}{% if r.status in ('manager','new','scheduled') %}<br>Ждёт менеджера{% endif %}</div>
+  </a>
+{% else %}
+  <div class="empty">В этой группе за период ничего нет.</div>
+{% endfor %}
+</div>
+{% endif %}
+{% if not d.total and not d.questions %}<div class="empty card">За период данных нет.</div>{% else %}
+<div class="grid2">
+  <div class="card">
+    <h2>Тональность</h2>{{ bars(d.tone, d.total) }}
+    <h3>Оценки</h3>{{ bars(d.ratings, d.total) }}
+    <h3>О чём жалуются</h3>
+    {% if d.themes_neg %}{{ bars(d.themes_neg, d.themes_neg|sum(attribute=1)) }}{% else %}<p class="hint">Негативных отзывов нет.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Повторяющиеся проблемы</h2>
+    {% if d.recurring %}<ul>{% for x in d.recurring %}<li>{{ x }}</li>{% endfor %}</ul>
+    {% else %}<p class="hint">Нет товаров или тем с тремя и более похожими жалобами.</p>{% endif %}
+    <h3>По товарам</h3>
+    <div class="tbl"><table><thead><tr><th>Товар</th><th class="num">Отзывов</th><th class="num">Ср. оценка</th><th class="num">Негатив</th><th class="num">Вопросов</th></tr></thead><tbody>
+    {% for name, p in d.products %}<tr><td>{{ name }}</td><td class="num">{{ p.n }}</td>
+      <td class="num">{{ ('%.1f'|format(p.sum/p.rn)).replace('.', ',') if p.rn else '—' }}</td><td class="num">{{ p.neg }}</td><td class="num">{{ p.q }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

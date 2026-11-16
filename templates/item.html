@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Вопрос' if it.kind=='question' else 'Отзыв' }}{% endblock %}
+{% block body %}
+<p><a href="{{ url_for('inbox') }}">← К списку</a></p>
+<div class="grid2">
+  <div class="card">
+    <h1>{{ 'Вопрос покупателя' if it.kind=='question' else 'Отзыв' }}</h1>
+    <p class="hint">{{ it.created_at|dt }} · {{ it.user_name or 'Покупатель без имени' }}</p>
+    {% if it.kind=='feedback' %}<p class="stars" style="font-size:20px">{{ '★' * (it.rating or 0) }}{{ '☆' * (5-(it.rating or 0)) }}</p>{% endif %}
+    <div class="quote">{{ it.text or '(текста нет)' }}</div>
+    {% if it.pros %}<h3>Достоинства</h3><div class="quote">{{ it.pros }}</div>{% endif %}
+    {% if it.cons %}<h3>Недостатки</h3><div class="quote">{{ it.cons }}</div>{% endif %}
+    {% if it.has_media %}<p class="hint" style="margin-top:8px">К отзыву приложены фото или видео — посмотрите их в кабинете площадки.</p>{% endif %}
+    <h3>Товар</h3>
+    <dl class="kv"><dt>Название</dt><dd>{{ it.product_name }}</dd><dt>Артикул</dt><dd>{{ it.supplier_article or it.nm_id }}</dd>
+      <dt>Площадка</dt><dd>{{ {'wb':'Wildberries','ozon':'Ozon','ym':'Яндекс Маркет'}.get(it.marketplace, it.marketplace) }}</dd></dl>
+    <h3>Разбор</h3>
+    <p>
+      {% if it.priority %}<span class="chip {{ it.priority }}">Приоритет: {{ it.priority }}</span>{% endif %}
+      <span class="chip">{{ it.scenario }}</span> <span class="chip">{{ it.theme }}</span> <span class="chip {{ it.tone }}">{{ it.tone }}</span>
+      {% if it.has_question and it.kind=='feedback' %}<span class="chip q">В отзыве вопрос</span>{% endif %}
+    </p>
+    {% if it.summary %}<p>{{ it.summary }}</p>{% endif %}
+    <p class="hint">Почему здесь: {{ it.route_reason }}. Разбор: {{ 'нейросеть' if it.analyzed_by=='llm' else 'по ключевым словам и шаблонам' }}.</p>
+  </div>
+
+  <div class="card">
+    {% if it.status in ('sent','sent_auto','answered_in_wb','answered_upstream','rejected','skipped') %}
+      <h2>{{ STATUS_RU[it.status] }}</h2>
+      {% if it.answer_text %}<div class="quote">{{ it.answer_text }}</div>{% endif %}
+      <p class="hint">{{ it.answered_at|dt }}</p>
+    {% else %}
+      {% if it.priority=='Критичный' %}<div class="banner"><b>Критичный отзыв.</b> Согласуйте ответ с руководителем перед публикацией.</div>{% endif %}
+      {% if it.status=='scheduled' %}<div class="banner warn">Этот ответ уйдёт автоматически {{ it.send_after|dt }}. Можно отредактировать и отправить сейчас или отменить автоответ.</div>{% endif %}
+      {% if it.error %}<div class="banner">Последняя ошибка: {{ it.error }}</div>{% endif %}
+      <h2>{{ 'Ответ на вопрос' if it.kind=='question' else 'Ответ на отзыв' }}</h2>
+      <p class="hint">Поля в {фигурных скобках} нужно заполнить. Ссылки, телефоны и мессенджеры сервис не пропустит.</p>
+      <form method="post">
+        <label for="text">Текст ответа</label>
+        <textarea id="text" name="text">{{ it.draft or '' }}</textarea>
+        <div class="btns">
+          <button class="btn" name="action" value="send">Опубликовать</button>
+          <button class="btn ghost" name="action" value="save">Сохранить черновик</button>
+          {% if it.status=='scheduled' %}<button class="btn ghost" name="action" value="cancel_auto">Отменить автоответ</button>{% endif %}
+        </div>
+        <label>Переписать черновик</label>
+        <div class="btns" style="margin-top:0">
+          <button class="btn ghost small" name="action" value="short">Короче</button>
+          <button class="btn ghost small" name="action" value="formal">Официальнее</button>
+          <button class="btn ghost small" name="action" value="warm">Теплее</button>
+          <button class="btn ghost small" name="action" value="variants">3 варианта</button>
+        </div>
+        <label for="hint">Или своими словами</label>
+        <input type="text" id="hint" name="hint" placeholder="Например: добавь, что бита и маска входят в комплект">
+        <div class="btns">
+          <button class="btn ghost small" name="action" value="regen">Пересоздать черновик</button>
+          <button class="btn ghost small" name="action" value="skip">Не отвечать</button>
+          {% if it.kind=='question' %}<button class="btn danger small" name="action" value="reject">Отклонить вопрос</button>{% endif %}
+        </div>
+      </form>
+      {% if variants %}
+        <h3>Варианты ответа</h3>
+        <p class="hint">Выберите вариант — он заменит черновик выше. Публикация по-прежнему вручную.</p>
+        {% for v in variants %}
+          <form method="post" class="variant">
+            <div class="quote">{{ v }}</div>
+            <input type="hidden" name="variant" value="{{ v }}">
+            <div class="btns" style="margin-top:6px"><button class="btn ghost small" name="action" value="use_variant">Взять этот вариант</button></div>
+          </form>
+        {% endfor %}
+      {% endif %}
+    {% endif %}
+    {% if product and product.description %}
+      <h3>Описание товара из карточки WB</h3><p class="hint" style="white-space:pre-wrap">{{ product.description[:1200] }}</p>
+    {% endif %}
+    {% if history %}<h3>История</h3><table>{% for h in history %}<tr><td>{{ h.at|dt }}</td><td>{{ h.event }}</td><td>{{ h.details }}</td></tr>{% endfor %}</table>{% endif %}
+  </div>
+</div>
+{% endblock %}

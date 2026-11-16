@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Журнал{% endblock %}
+{% block body %}
+<h1>Журнал</h1>
+<p class="hint">Все проверки WB, отправленные ответы, ошибки и изменения настроек.</p>
+<div class="card tbl"><table><thead><tr><th>Время</th><th>Событие</th><th>Запись</th><th>Подробности</th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.at|dt }}</td><td>{% if r.level=='error' %}<span class="chip Критичный">{{ r.event }}</span>{% else %}{{ r.event }}{% endif %}</td>
+<td>{% if r.item_id %}<a href="{{ url_for('item', item_id=r.item_id) }}">открыть</a>{% endif %}</td><td>{{ r.details }}</td></tr>
+{% else %}<tr><td colspan="4" class="empty">Пока пусто</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
